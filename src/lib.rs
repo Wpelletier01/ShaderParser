@@ -571,32 +571,33 @@ pub enum VariableType {
 
 
     // vector types
-    BVEC2(bool,bool),
-    BVEC3(bool,bool,bool),
-    BVEC4(bool,bool,bool,bool),
+    BVEC2([bool;2]),
+    BVEC3([bool;3]),
+    BVEC4([bool;4]),
     
-    IVEC2(i32,i32),
-    IVEC3(i32,i32,i32),
-    IVEC4(i32,i32,i32,i32),
+    IVEC2([i32;2]),
+    IVEC3([i32;3]),
+    IVEC4([i32;4]),
 
-    UVEC2(u32,u32),
-    UVEC3,
-    UVEC4,
+    UVEC2([u32;2]),
+    UVEC3([u32;3]),
+    UVEC4([u32;4]),
 
-    VEC2(f32,f32),
-    VEC3(f32,f32,f32),
-    VEC4(f32,f32,f32,f32),
+    VEC2([f32;2]),
+    VEC3([f32;3]),
+    VEC4([f32;4]),
 
-    DVEC2(f64,f64),
-    DVEC3(f64,f64,f64),
-    DVEC4(f64,f64,f64,f64),
+    DVEC2([f64;2]),
+    DVEC3([f64;3]),
+    DVEC4([f64;4]),
 
     // matrice types
-    MAT2(nalgebra_glm::Mat2),
-    MAT3(nalgebra_glm::Mat3),
-    MAT4(nalgebra_glm::Mat4),
+    MAT2([[f32;4]; 2]),
+    MAT3([[f32;4]; 3]),
+    MAT4([[f32;4]; 4]),
 
 
+    //TODO: add other type when it will be needed
 
 
 
