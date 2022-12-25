@@ -121,28 +121,48 @@ mod test {
     }   
 
     #[test]
-    fn variable_layout() {
+    fn get_storage_qualifiers() {
 
-        match parse_layout_storage("layout (location = 2) in vec2 aTexCoord;") {
+        let mut t = LayoutDeclaration::init("layout (location = 2) in vec2 aTexCoord;");
 
-            Some(ctn) => {
+        t.push((LayoutVarType::LOCATION,2));
 
-                let mut t = LayoutDeclaration::init();
 
-                t.push((LayoutVarType::LOCATION,2));
-                
 
-                
-                assert_eq!(ctn,StorageQualifier::LAYOUT(t));
+        let expected:Vec<StorageQualifier> = vec![
 
-            },
-            None => assert!(false),
+            StorageQualifier::LAYOUT(t),
+            StorageQualifier::IN,
 
-        }
+        ];
+
+        let founded = 
+            get_storage_qualifier("layout (location = 2) in vec2 aTexCoord;");
+
+
+        assert_eq!(expected,founded);
 
 
     }
 
+
+    #[test]
+    fn filtering_storage_qualifier() {
+        
+        let mut t = LayoutDeclaration::init("layout (location = 2)");
+
+        t.push((LayoutVarType::LOCATION,2));
+
+
+        assert_eq!(
+
+            remove_storage_type("layout (location = 2) in vec2 aTexCoord;", vec![StorageQualifier::LAYOUT(t),StorageQualifier::IN,]).to_string(),
+            String::from("vec2 aTexCoord;")
+        
+        );
+
+
+    }
 
 
 
@@ -299,6 +319,7 @@ fn filtering(mut shader_info:ShaderFileInfo) -> Result<(),EParser> {
         } 
 
         let store_qualifiers = get_storage_qualifier(line);
+        
 
 
        
@@ -318,31 +339,51 @@ fn get_storage_qualifier(line:&str) -> Vec<StorageQualifier>{
 
     let mut vstorage:Vec<StorageQualifier> = Vec::new();
 
-    match parse_layout_storage(line) {
+    if line.contains("layout") {
+        
+        match parse_layout_storage(line) {
 
-        Some(s) => vstorage.push(s),
-        None => {}
+            Some(s) => vstorage.push(s),
+            None => {}
+    
+        }
+    }
+
+    if line.contains(" uniform ") {
+
+        vstorage.push(StorageQualifier::UNIFORM);
+    
+    } else {
+
+        if line.contains(" in ") {
+        
+            vstorage.push(StorageQualifier::IN);
+    
+        } else if line.contains(" out ") {
+    
+            vstorage.push(StorageQualifier::OUT)
+    
+        } 
 
     }
 
-
-    
     vstorage
 
 }
 
 
-fn parse_shade_stage_storage(line:&str) -> Vec<StorageQualifier> {
 
-    let mut vstorage:Vec<StorageQualifier> = Vec::new();
 
-    if line.contains(" in ") {
+
+
+fn parse_shader_stage_storage(line:&str) -> Option<StorageQualifier> {
 
    
 
-    }
-    
-    vstorage
+    if line.contains(" in ") { return Some(StorageQualifier::IN); }
+    else if line.contains(" out") { return Some(StorageQualifier::OUT); }
+
+    None
 
 }
 
@@ -381,7 +422,7 @@ fn parse_layout_storage(line:&str) -> Option<StorageQualifier> {
             .map(|f| f.to_string())
             .collect();
         
-        let mut layout_var = LayoutDeclaration::init();   
+        let mut layout_var = LayoutDeclaration::init(line);   
 
 
         for content in par_content.iter() {
@@ -479,10 +520,28 @@ fn parse_preprocessor(line:&str) -> Result<PreprocessorDeclarationType,EParser> 
 
 fn get_var_type(line:&str) -> Option<VariableType> {
 
-
+    
+    if line.contains("")
 
 
     None
+
+}
+
+
+fn remove_storage_type(line:&str,vstorage:Vec<StorageQualifier>) -> String {
+
+    let mut filter_line = line.to_string();
+
+    for store in vstorage.iter() {
+
+        println!("{}",&store.to_string());
+        filter_line = filter_line.replace(&store.to_string(), "");
+
+
+    }
+
+    filter_line
 
 }
 
@@ -563,38 +622,38 @@ pub enum VariableType {
 
 
     //scalar types
-    BOOL(bool),
-    INT(i32),
-    UINT(u32),
-    FLOAT(f32),
-    DOUBLE(f64),
+    BOOL    (Option<bool>),
+    INT     (Option<i32>),
+    UINT    (Option<u32>),
+    FLOAT   (Option<f32>),
+    DOUBLE  (Option<f64>),
 
 
     // vector types
-    BVEC2([bool;2]),
-    BVEC3([bool;3]),
-    BVEC4([bool;4]),
+    BVEC2(Option<[bool;2]>),
+    BVEC3(Option<[bool;3]>),
+    BVEC4(Option<[bool;4]>),
     
-    IVEC2([i32;2]),
-    IVEC3([i32;3]),
-    IVEC4([i32;4]),
+    IVEC2(Option<[i32;2]>),
+    IVEC3(Option<[i32;3]>),
+    IVEC4(Option<[i32;4]>),
 
-    UVEC2([u32;2]),
-    UVEC3([u32;3]),
-    UVEC4([u32;4]),
+    UVEC2(Option<[u32;2]>),
+    UVEC3(Option<[u32;3]>),
+    UVEC4(Option<[u32;4]>),
 
-    VEC2([f32;2]),
-    VEC3([f32;3]),
-    VEC4([f32;4]),
+    VEC2(Option<[f32;2]>),
+    VEC3(Option<[f32;3]>),
+    VEC4(Option<[f32;4]>),
 
-    DVEC2([f64;2]),
-    DVEC3([f64;3]),
-    DVEC4([f64;4]),
+    DVEC2(Option<[f64;2]>),
+    DVEC3(Option<[f64;3]>),
+    DVEC4(Option<[f64;4]>),
 
     // matrice types
-    MAT2([[f32;4]; 2]),
-    MAT3([[f32;4]; 3]),
-    MAT4([[f32;4]; 4]),
+    MAT2(Option<[[f32;4]; 2]>),
+    MAT3(Option<[[f32;4]; 3]>),
+    MAT4(Option<[[f32;4]; 4]>),
 
 
     //TODO: add other type when it will be needed
@@ -608,13 +667,14 @@ pub enum VariableType {
 #[derive(Debug,PartialEq)]
 pub struct LayoutDeclaration { 
 
+    raw:       String,
     variables: Vec<(LayoutVarType,u32)> 
 
 }
 
 impl LayoutDeclaration {
 
-    fn init() -> Self { LayoutDeclaration { variables: Vec::new() } }
+    fn init(raw:&str) -> Self { LayoutDeclaration { variables: Vec::new(),raw: raw.to_string() } }
 
     fn push(&mut self, var:(LayoutVarType,u32)) { self.variables.push(var) }
 
@@ -629,8 +689,6 @@ pub enum LayoutVarType {
 }
 
 
-
-
 #[derive(Debug,PartialEq)]
 pub enum StorageQualifier {
 
@@ -641,6 +699,26 @@ pub enum StorageQualifier {
     UNIFORM,
     LAYOUT(LayoutDeclaration)
 
+
+
+}
+
+impl StorageQualifier {
+
+    fn to_string(&self) -> String {
+
+        return match self {
+
+            Self::CONST =>      "const",
+            Self::DEFAULT =>    "",
+            Self::IN =>         "in",
+            Self::OUT =>        "out",
+            Self::LAYOUT(layout) => layout.raw.as_str(),
+            Self::UNIFORM =>    "uniform",
+        
+        }.to_string();
+
+    }
 
 
 }
