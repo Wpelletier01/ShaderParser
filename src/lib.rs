@@ -1,34 +1,33 @@
-/*   
-
-    This is a kind of parser for my own engine for getting things like variables,preprocess declarations, etc.
-    This is work in progress which updates when I need some information about shader for the engine. This does
-    not check for syntax errors
-
-*/
-
-
-
 #![allow(dead_code)]
 #![allow(non_snake_case)]
 
 
-
 use std::path::Path;
 use std::fs;
+use std::ptr::eq;
 use thiserror::Error;
 
+pub mod datatype;
 
+
+use datatype::*;
+
+
+//
+//
+// ------------------------------------------------------------------------------------------
+// Test Section
+//
 #[cfg(test)] 
 mod test {
     
-
-    
-    
     use std::env;
     use super::*;
+
     
 
-    fn get_relative_path(p:&str) -> String { format!("{}/{}",env::current_dir().unwrap().to_str().unwrap(),p)}
+    fn get_relative_path(p:&str) -> 
+        String { format!("{}/{}",env::current_dir().unwrap().to_str().unwrap(),p)}
 
     #[test]
     fn load_correctly() -> Result<(),String> {
@@ -45,7 +44,10 @@ mod test {
     fn bad_ext() {
         
 
-        let t = load_file("/disk/Other/Dev/Rust/Everly/ShaderParser/data_test/bad_extension.txt");
+        let t = 
+            load_file(
+                "/disk/Other/Dev/Rust/Everly/ShaderParser/data_test/bad_extension.txt"
+            );
 
         assert!(t.is_err());
 
@@ -78,13 +80,15 @@ mod test {
 
             },
 
-            Err(err) => Err(format!("unable to compare shader type because of '{}'",err.to_string()))
-
+            Err(err) => Err(
+                format!("unable to compare shader type because of '{}'",err.to_string())
+            )
 
 
         }
 
     }
+
 
     #[test]
     fn broken_symlink() {
@@ -95,7 +99,9 @@ mod test {
 
             Ok(_) => assert!(false),
 
-            Err(e) => assert_eq!(EParser::LOADING(p.to_string(),"Broken symbolic link".to_string()),e)
+            Err(e) => assert_eq!(
+                EParser::LOADING(p.to_string(),"Broken symbolic link".to_string()),e
+            )
 
 
         }
@@ -108,7 +114,7 @@ mod test {
     // filtering
     
     #[test]
-    fn version_preprocess(){
+    fn version_preprocessor(){
 
 
         let test_str = "#version 430 core";
@@ -156,7 +162,9 @@ mod test {
 
         assert_eq!(
 
-            remove_storage_type("layout (location = 2) in vec2 aTexCoord;", vec![StorageQualifier::LAYOUT(t),StorageQualifier::IN,]).to_string(),
+            remove_storage_type(
+                "layout (location = 2) in vec2 aTexCoord;", 
+                vec![StorageQualifier::LAYOUT(t),StorageQualifier::IN,]).to_string().trim(),
             String::from("vec2 aTexCoord;")
         
         );
@@ -168,10 +176,9 @@ mod test {
 
 
 }
-
-
-
-
+//
+// Error handling for the library
+//
 #[allow(non_camel_case_types,non_snake_case)]
 #[derive(Error,Debug,PartialEq)]
 pub enum EParser {
@@ -180,8 +187,8 @@ pub enum EParser {
     LOADING(String,String),
     #[error("Unable to convert OsString to String")]
     OS_STRING_CONVERSION,
-    #[error("The extension '{0}' is not suported")]
-    UNSUPORTED_EXT(String),
+    #[error("The extension '{0}' is not supported")]
+    UNSUPPORTED_EXT(String),
     #[error("The glsl language expect to have #version before anything else but found '{0}'")]
     OMITTED_FIRST_LINE(String),
     #[error("Unable to get index location of &str '{0}'")]
@@ -196,6 +203,47 @@ pub enum EParser {
 }
    
 
+const TYPE_IN_STR: [&str;27] = [
+    
+    "bool",
+    "int",
+    "uint",
+    "float",
+    "double",
+
+
+    "uvec2",
+    "uvec3",
+    "uvec4",
+
+    "ivec2",
+    "ivec3",
+    "ivec4",
+
+    "bvec2",
+    "bvec3",
+    "bvec4",
+
+    "vec2",
+    "vec3",
+    "vec4",
+
+    "dvec2",
+    "dvec3",
+    "dvec4",
+
+    "mat2",
+    "mat3",
+    "mat4",
+  
+    
+    "dmat2",
+    "dmat3",
+    "dmat4",
+
+    "sampler2D"
+
+];
 
 
 fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
@@ -214,7 +262,7 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
                     return Err(EParser::LOADING(fp.to_string(),"Broken symbolic link".to_string()));
                 }
 
-                return Err(EParser::LOADING(fp.to_string(),"file doesnt exist".to_string()));
+                return Err(EParser::LOADING(fp.to_string(),"file doesn't exist".to_string()));
                 
 
             }
@@ -229,7 +277,7 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
     
     let stype:ShaderType;
 
-    // Check if the file passed have a suported extension
+    // Check if the file passed have a supported extension
     match p.extension() {
         
         Some(_ext) => {
@@ -245,7 +293,7 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
                 
                 "frag" => stype = ShaderType::FRAGMENT,
                 "vert" => stype = ShaderType::VERTEX,
-                _ => return Err(EParser::LOADING(fp.to_string(),EParser::UNSUPORTED_EXT(ext.to_string()).to_string())), 
+                _ => return Err(EParser::LOADING(fp.to_string(),EParser::UNSUPPORTED_EXT(ext.to_string()).to_string())), 
 
             }
 
@@ -254,7 +302,7 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
         
         None => return Err(EParser::LOADING(
                 fp.to_string(),
-                "unable to retrieve file extension. Possible causes:\n\t- hadn't a file name\n\t- dont have a dot\n\t- have dot but nothing after".to_string()
+                "unable to retrieve file extension. Possible causes:\n\t- hadn't a file name\n\t- don't have a dot\n\t- have dot but nothing after".to_string()
             ))
 
     
@@ -271,9 +319,6 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
 
     };
 
-    
-
-     
     
     let sinfo = ShaderFileInfo::new(
         stype,
@@ -320,6 +365,8 @@ fn filtering(mut shader_info:ShaderFileInfo) -> Result<(),EParser> {
 
         let store_qualifiers = get_storage_qualifier(line);
         
+        let filter_line = remove_storage_type(line, store_qualifiers);
+
 
 
        
@@ -378,7 +425,6 @@ fn get_storage_qualifier(line:&str) -> Vec<StorageQualifier>{
 
 fn parse_shader_stage_storage(line:&str) -> Option<StorageQualifier> {
 
-   
 
     if line.contains(" in ") { return Some(StorageQualifier::IN); }
     else if line.contains(" out") { return Some(StorageQualifier::OUT); }
@@ -521,7 +567,399 @@ fn parse_preprocessor(line:&str) -> Result<PreprocessorDeclarationType,EParser> 
 fn get_var_type(line:&str) -> Option<VariableType> {
 
     
-    if line.contains("")
+    let split_line = line.to_string();
+
+
+
+    for l in split_line.split(" ") {
+
+        if TYPE_IN_STR.contains(&l) {
+
+            let vtype:VariableType = match l {
+
+                "bool"  => {
+                    if have_declared_value(line) {
+
+                        let equal_split = match line.split("=").last() {
+
+                            Some(v) => v,
+                            None => return None
+
+
+                        };
+
+                        if equal_split.contains("false") {
+                            
+                            VariableType::BOOL(Some(false));
+
+                        } else if equal_split.contains("true") {
+
+                            VariableType::BOOL(Some(true));
+
+                        }
+
+
+                    }
+
+                    VariableType::BOOL(None)
+
+
+                },
+                "int"   => {
+                    if have_declared_value(line) {
+
+                        let equal_split:String = match line.split("=").last() {
+
+                            Some(v) => v.to_string(),
+                            None => return None
+
+
+                        };
+
+                        match equal_split.parse::<i32>() {
+
+                            Ok(value) => VariableType::INT(Some(value)),
+                            Err(_) => VariableType::INT(None)
+
+                        };
+
+                        
+
+
+                    }
+
+                    VariableType::INT(None)
+
+                },
+                "uint"  => {
+
+                    if have_declared_value(line) {
+
+                        let equal_split:String = match line.split("=").last() {
+
+                            Some(v) => v.to_string(),
+                            None => return None
+
+
+                        };
+
+                        match equal_split.parse::<u32>() {
+
+                            Ok(value) => VariableType::UINT(Some(value)),
+                            Err(_) => VariableType::UINT(None)
+
+                        };
+
+                    }
+
+                    VariableType::UINT(None)
+
+                },
+                "float" => {
+                    if have_declared_value(line) {
+
+                        let equal_split:String = match line.split("=").last() {
+
+                            Some(v) => v.to_string(),
+                            None => return None
+
+
+                        };
+
+                        match equal_split.parse::<f32>() {
+
+                            Ok(value) => VariableType::FLOAT(Some(value)),
+                            Err(_) => VariableType::FLOAT(None)
+
+                        };
+
+                    }
+
+                    VariableType::FLOAT(None)
+
+
+                },
+                "double"=> {
+                    if have_declared_value(line) {
+
+                        let equal_split:String = match line.split("=").last() {
+
+                            Some(v) => v.to_string(),
+                            None => return None
+
+
+                        };
+
+                        match equal_split.parse::<f64>() {
+
+                            Ok(value) => VariableType::DOUBLE(Some(value)),
+                            Err(_) => VariableType::DOUBLE(None)
+
+                        };
+
+                    }
+
+                    VariableType::DOUBLE(None)
+
+                },
+            
+            
+                "uvec2" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::UVEC2(None)
+
+                },
+                "uvec3" => {
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::UVEC3(None)
+
+                },
+                "uvec4" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::UVEC4(None)
+
+                },
+            
+                "ivec2" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::IVEC2(None)
+
+                },
+                "ivec3" => {
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::IVEC3(None)
+
+                },
+                "ivec4" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::IVEC4(None)
+
+                },
+
+                "bvec2" => {
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::BVEC2(None)
+
+                },
+                "bvec3" => {
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::BVEC3(None)
+
+                },
+                "bvec4" => {
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::BVEC4(None)
+
+                },
+                "vec2"  => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::VEC2(None)
+
+                },
+                "vec3"  => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::VEC3(None)
+
+                },
+                "vec4"  => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::VEC4(None)
+
+
+                },
+                "dvec2" => {
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::DVEC2(None)
+
+                },
+                "dvec3" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::DVEC3(None)
+
+                },
+                "dvec4" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::DVEC4(None)
+
+                },
+                "mat2"  => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::MAT2(None)
+
+
+                },
+                "mat3"  => {
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::MAT3(None)
+
+                },
+                "mat4"  => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::MAT4(None)
+
+
+                },
+             
+                
+                "dmat2" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::DMAT2(None)
+
+                },
+                "dmat3" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::DMAT3(None)
+
+
+                },
+                "dmat4" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()
+
+                    }
+
+                    VariableType::DMAT4(None)
+
+
+                },
+
+                "sampler2D" => {
+
+                    if have_declared_value(line) {
+
+                        unimplemented!()    
+                    }
+
+                    VariableType::SAMPLER2D(None)
+
+                },
+
+                _ => return None,
+
+            };
+
+            return Some(vtype);
+
+        }
+
+        return None 
+
+    }
 
 
     None
@@ -529,31 +967,20 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 }
 
 
-fn remove_storage_type(line:&str,vstorage:Vec<StorageQualifier>) -> String {
+fn have_declared_value(line:&str) -> bool { line.contains("=") }
+
+
+fn remove_storage_type<'a>(line:&str,vstorage:Vec<StorageQualifier>) -> String {
 
     let mut filter_line = line.to_string();
 
     for store in vstorage.iter() {
-
-        println!("{}",&store.to_string());
-        filter_line = filter_line.replace(&store.to_string(), "");
-
+ 
+        filter_line = filter_line.replace(&store.as_str(), "");
 
     }
 
     filter_line
-
-}
-
-
-
-#[derive(Debug,PartialEq)]
-pub enum ShaderType {
-
-    VERTEX,
-    FRAGMENT,
-    TESSCONTROL,
-    GEOMETRY
 
 }
 
@@ -578,156 +1005,13 @@ impl ShaderFileInfo{
 
 
 
-#[derive(Debug,PartialEq)]
-pub enum DeclarationLine {
 
-    PREPROCESSOR(PreprocessorDeclarationType),
-    VARIABLE(ShaderVariables)
 
 
-}
 
-#[derive(Debug,PartialEq)]
-pub enum PreprocessorDeclarationType {
 
 
-    VERSION(u16,VersionBranch)
 
 
-}
 
-#[derive(Debug,PartialEq)]
-pub enum VersionBranch {
-
-    CORE,
-    UNKNOWN
-}
-
-#[derive(Debug,PartialEq)]
-pub struct ShaderVariables {
-
-    name:       String,
-    store_type: Vec<StorageQualifier>,
-    var_type:   VariableType,
-
-
-}
-
-
-
-
-
-#[derive(Debug,PartialEq)]
-pub enum VariableType {
-
-
-    //scalar types
-    BOOL    (Option<bool>),
-    INT     (Option<i32>),
-    UINT    (Option<u32>),
-    FLOAT   (Option<f32>),
-    DOUBLE  (Option<f64>),
-
-
-    // vector types
-    BVEC2(Option<[bool;2]>),
-    BVEC3(Option<[bool;3]>),
-    BVEC4(Option<[bool;4]>),
-    
-    IVEC2(Option<[i32;2]>),
-    IVEC3(Option<[i32;3]>),
-    IVEC4(Option<[i32;4]>),
-
-    UVEC2(Option<[u32;2]>),
-    UVEC3(Option<[u32;3]>),
-    UVEC4(Option<[u32;4]>),
-
-    VEC2(Option<[f32;2]>),
-    VEC3(Option<[f32;3]>),
-    VEC4(Option<[f32;4]>),
-
-    DVEC2(Option<[f64;2]>),
-    DVEC3(Option<[f64;3]>),
-    DVEC4(Option<[f64;4]>),
-
-    // matrice types
-    MAT2(Option<[[f32;4]; 2]>),
-    MAT3(Option<[[f32;4]; 3]>),
-    MAT4(Option<[[f32;4]; 4]>),
-
-
-    //TODO: add other type when it will be needed
-
-
-
-}
-
-
-
-#[derive(Debug,PartialEq)]
-pub struct LayoutDeclaration { 
-
-    raw:       String,
-    variables: Vec<(LayoutVarType,u32)> 
-
-}
-
-impl LayoutDeclaration {
-
-    fn init(raw:&str) -> Self { LayoutDeclaration { variables: Vec::new(),raw: raw.to_string() } }
-
-    fn push(&mut self, var:(LayoutVarType,u32)) { self.variables.push(var) }
-
-}
-
-
-#[derive(Debug,PartialEq)]
-pub enum LayoutVarType {
-
-    LOCATION
-
-}
-
-
-#[derive(Debug,PartialEq)]
-pub enum StorageQualifier {
-
-    DEFAULT,
-    CONST,
-    IN,
-    OUT,
-    UNIFORM,
-    LAYOUT(LayoutDeclaration)
-
-
-
-}
-
-impl StorageQualifier {
-
-    fn to_string(&self) -> String {
-
-        return match self {
-
-            Self::CONST =>      "const",
-            Self::DEFAULT =>    "",
-            Self::IN =>         "in",
-            Self::OUT =>        "out",
-            Self::LAYOUT(layout) => layout.raw.as_str(),
-            Self::UNIFORM =>    "uniform",
-        
-        }.to_string();
-
-    }
-
-
-}
-
-
-
-
-
-
-//TODO: atomic type 
-//TODO: image 
 
