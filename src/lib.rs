@@ -4,7 +4,6 @@
 
 use std::path::Path;
 use std::fs;
-use std::ptr::eq;
 use thiserror::Error;
 
 pub mod datatype;
@@ -107,12 +106,7 @@ mod test {
         }
 
     }
-
-
-
-    
-    // filtering
-    
+  
     #[test]
     fn version_preprocessor(){
 
@@ -129,7 +123,9 @@ mod test {
     #[test]
     fn get_storage_qualifiers() {
 
-        let mut t = LayoutDeclaration::init("layout (location = 2) in vec2 aTexCoord;");
+        let mut t = LayoutDeclaration::init(
+            "layout (location = 2) in vec2 aTexCoord;"
+        );
 
         t.push((LayoutVarType::LOCATION,2));
 
@@ -172,11 +168,41 @@ mod test {
 
     }
 
+    #[test]
+    fn empty_bool_type() {
+
+        let s = "in bool test;";
+
+
+        assert_eq!(VariableType::BOOL(None),get_var_type(s).unwrap());
+
+
+
+    }
+
+    #[test]
+    fn non_empty_bool_type() {
+
+        let s = "in bool test = true;";
+        assert_eq!(VariableType::BOOL(Some(true)),get_var_type(s).unwrap());
+            
+    }
+
+    #[test]
+    fn empty_vec3_float() {
+
+
+
+    }
+
+
 
 
 
 }
 //
+//
+// ------------------------------------------------------------------------------------------
 // Error handling for the library
 //
 #[allow(non_camel_case_types,non_snake_case)]
@@ -197,7 +223,12 @@ pub enum EParser {
     STRING_PARSING(String,String),
     #[error("Cant parse line {0} because of '{1}'")]
     PARSING_LINE(String,String),
-    
+    #[error("the line '{0}' has been marked for having a '=' but it doesn't")]
+    MARKED_VALUE_DECL(String),
+    #[error("Cant get the value of vector in line '{0}'. Reason: {1}")]
+    VEC_VALUE(String,String),
+    #[error("Cant find type of variable in line '{0}")]
+    VARIABLE_TYPE(String)
 
 
 }
@@ -564,7 +595,7 @@ fn parse_preprocessor(line:&str) -> Result<PreprocessorDeclarationType,EParser> 
 
 }
 
-fn get_var_type(line:&str) -> Option<VariableType> {
+fn get_var_type(line:&str) -> Result<VariableType,EParser> {
 
     
     let split_line = line.to_string();
@@ -575,33 +606,37 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
         if TYPE_IN_STR.contains(&l) {
 
-            let vtype:VariableType = match l {
+            return match l {
 
                 "bool"  => {
+
+
                     if have_declared_value(line) {
+
+
 
                         let equal_split = match line.split("=").last() {
 
                             Some(v) => v,
-                            None => return None
+                            None => return Err(EParser::MARKED_VALUE_DECL(line.to_string()))
 
 
                         };
 
                         if equal_split.contains("false") {
                             
-                            VariableType::BOOL(Some(false));
+                            return Ok(VariableType::BOOL(Some(false)));
 
                         } else if equal_split.contains("true") {
 
-                            VariableType::BOOL(Some(true));
+                            return Ok(VariableType::BOOL(Some(true)));
 
                         }
 
 
                     }
 
-                    VariableType::BOOL(None)
+                    Ok(VariableType::BOOL(None))
 
 
                 },
@@ -611,7 +646,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
                         let equal_split:String = match line.split("=").last() {
 
                             Some(v) => v.to_string(),
-                            None => return None
+                            None => return Err(EParser::MARKED_VALUE_DECL(line.to_string()))
 
 
                         };
@@ -619,7 +654,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
                         match equal_split.parse::<i32>() {
 
                             Ok(value) => VariableType::INT(Some(value)),
-                            Err(_) => VariableType::INT(None)
+                            Err(_) => return Err(EParser::MARKED_VALUE_DECL(line.to_string()))
 
                         };
 
@@ -628,7 +663,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     }
 
-                    VariableType::INT(None)
+                    Ok(VariableType::INT(None))
 
                 },
                 "uint"  => {
@@ -638,7 +673,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
                         let equal_split:String = match line.split("=").last() {
 
                             Some(v) => v.to_string(),
-                            None => return None
+                            None => return Err(EParser::MARKED_VALUE_DECL(line.to_string()))
 
 
                         };
@@ -652,7 +687,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     }
 
-                    VariableType::UINT(None)
+                    Ok(VariableType::UINT(None))
 
                 },
                 "float" => {
@@ -661,7 +696,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
                         let equal_split:String = match line.split("=").last() {
 
                             Some(v) => v.to_string(),
-                            None => return None
+                            None => return Err(EParser::MARKED_VALUE_DECL(line.to_string()))
 
 
                         };
@@ -675,17 +710,18 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     }
 
-                    VariableType::FLOAT(None)
+                   Ok(VariableType::FLOAT(None))
 
 
                 },
                 "double"=> {
+
                     if have_declared_value(line) {
 
                         let equal_split:String = match line.split("=").last() {
 
                             Some(v) => v.to_string(),
-                            None => return None
+                            None => return Err(EParser::MARKED_VALUE_DECL(line.to_string()))
 
 
                         };
@@ -699,7 +735,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     }
 
-                    VariableType::DOUBLE(None)
+                    Ok(VariableType::DOUBLE(None))
 
                 },
             
@@ -708,32 +744,48 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<u32,2>(line) {
+
+                            Ok(v) => Ok(VariableType::UVEC2(Some(v))),
+                            Err(e) => Err(e) 
+                            
+                        }
 
                     }
 
-                    VariableType::UVEC2(None)
+                    Ok(VariableType::UVEC2(None))
 
                 },
                 "uvec3" => {
+                    
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<u32,3>(line) {
+
+                            Ok(v) => Ok(VariableType::UVEC3(Some(v))),
+                            Err(e) => Err(e) 
+                            
+                        }
 
                     }
 
-                    VariableType::UVEC3(None)
+                    Ok(VariableType::UVEC3(None))
 
                 },
                 "uvec4" => {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<u32,4>(line) {
+
+                            Ok(v) => Ok(VariableType::UVEC4(Some(v))),
+                            Err(e) => Err(e)
+                            
+                        }
 
                     }
 
-                    VariableType::UVEC4(None)
+                    Ok(VariableType::UVEC4(None))
 
                 },
             
@@ -741,32 +793,51 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<i32,2>(line) {
+
+                            Ok(v) => Ok(VariableType::IVEC2(Some(v))),
+                            Err(e) => Err(e)
+                            
+                        }
+                        
 
                     }
 
-                    VariableType::IVEC2(None)
+                    Ok(VariableType::IVEC2(None))
 
                 },
+
                 "ivec3" => {
+
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<i32,3>(line) {
+
+                            Ok(v) => Ok(VariableType::IVEC3(Some(v))),
+                            Err(e) => Err(e) 
+                            
+                        }
+
 
                     }
 
-                    VariableType::IVEC3(None)
+                    Ok(VariableType::IVEC3(None))
 
                 },
                 "ivec4" => {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<i32,4>(line) {
+
+                            Ok(v) => Ok(VariableType::IVEC4(Some(v))),
+                            Err(e) => Err(e) 
+
+                        }
 
                     }
 
-                    VariableType::IVEC4(None)
+                    Ok(VariableType::IVEC4(None))
 
                 },
 
@@ -777,7 +848,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     }
 
-                    VariableType::BVEC2(None)
+                    Ok(VariableType::BVEC2(None))
 
                 },
                 "bvec3" => {
@@ -787,7 +858,7 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     }
 
-                    VariableType::BVEC3(None)
+                    Ok(VariableType::BVEC3(None))
 
                 },
                 "bvec4" => {
@@ -797,146 +868,114 @@ fn get_var_type(line:&str) -> Option<VariableType> {
 
                     }
 
-                    VariableType::BVEC4(None)
+                    Ok(VariableType::BVEC4(None))
 
                 },
                 "vec2"  => {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<f32,2>(line) {
+
+                            Ok(v) => Ok(VariableType::VEC2(Some(v))),
+                            Err(e) => Err(e)
+                        }
+                        
 
                     }
 
-                    VariableType::VEC2(None)
+                    Ok(VariableType::VEC2(None))
 
                 },
                 "vec3"  => {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<f32,3>(line) {
+
+                            Ok(v) => Ok(VariableType::VEC3(Some(v))),
+                            Err(e) => Err(e) 
+                        }
 
                     }
 
-                    VariableType::VEC3(None)
+                    Ok(VariableType::VEC3(None))
 
                 },
                 "vec4"  => {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<f32,4>(line) {
+
+                            Ok(v) => Ok(VariableType::VEC4(Some(v))),
+                            Err(e) => Err(e)
+                        }
 
                     }
 
-                    VariableType::VEC4(None)
+                    Ok(VariableType::VEC4(None))
 
 
                 },
                 "dvec2" => {
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<f64,2>(line) {
+
+                            Ok(v) => Ok(VariableType::DVEC2(Some(v))),
+                            Err(e) => Err(e) 
+                        }
 
                     }
 
-                    VariableType::DVEC2(None)
+                    Ok(VariableType::DVEC2(None))
 
                 },
                 "dvec3" => {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<f64,3>(line) {
+
+                            Ok(v) => Ok(VariableType::DVEC3(Some(v))),
+                            Err(e) => Err(e) 
+                        }
 
                     }
 
-                    VariableType::DVEC3(None)
+                    Ok(VariableType::DVEC3(None))
 
                 },
                 "dvec4" => {
 
                     if have_declared_value(line) {
 
-                        unimplemented!()
+                        return match format_vec_value::<f64,4>(line) {
 
+                            Ok(v) => Ok(VariableType::DVEC4(Some(v))),
+                            Err(e) => Err(e) 
+                        }
                     }
 
-                    VariableType::DVEC4(None)
+                    Ok(VariableType::DVEC4(None))
 
                 },
-                "mat2"  => {
-
-                    if have_declared_value(line) {
-
-                        unimplemented!()
-
-                    }
-
-                    VariableType::MAT2(None)
 
 
-                },
-                "mat3"  => {
-                    if have_declared_value(line) {
-
-                        unimplemented!()
-
-                    }
-
-                    VariableType::MAT3(None)
-
-                },
-                "mat4"  => {
-
-                    if have_declared_value(line) {
-
-                        unimplemented!()
-
-                    }
-
-                    VariableType::MAT4(None)
-
-
-                },
-             
                 
-                "dmat2" => {
 
-                    if have_declared_value(line) {
+                "mat2"  =>  Ok(VariableType::MAT2(None)),
 
-                        unimplemented!()
+                "mat3"  =>  Ok(VariableType::MAT3(None)),
+                
+                "mat4"  =>  Ok(VariableType::MAT4(None)),
+             
+                "dmat2" =>  Ok(VariableType::DMAT2(None)),
+                
+                "dmat3" =>  Ok(VariableType::DMAT3(None)),
 
-                    }
-
-                    VariableType::DMAT2(None)
-
-                },
-                "dmat3" => {
-
-                    if have_declared_value(line) {
-
-                        unimplemented!()
-
-                    }
-
-                    VariableType::DMAT3(None)
-
-
-                },
-                "dmat4" => {
-
-                    if have_declared_value(line) {
-
-                        unimplemented!()
-
-                    }
-
-                    VariableType::DMAT4(None)
-
-
-                },
+                "dmat4" =>  Ok(VariableType::DMAT4(None)),
 
                 "sampler2D" => {
 
@@ -945,27 +984,130 @@ fn get_var_type(line:&str) -> Option<VariableType> {
                         unimplemented!()    
                     }
 
-                    VariableType::SAMPLER2D(None)
+                    Ok(VariableType::SAMPLER2D(None))
 
                 },
 
-                _ => return None,
+                _ => return Err(EParser::VARIABLE_TYPE(line.to_string())),
 
             };
 
-            return Some(vtype);
-
+           
         }
 
-        return None 
 
     }
 
 
-    None
+    return Err(EParser::VARIABLE_TYPE(line.to_string()))
 
 }
 
+
+fn format_vec_value<'a ,T,const N:usize>(content:&str) -> Result<[T;N],EParser>
+where T: std::str::FromStr + Copy + Default
+{
+
+    let vec_split:Vec<&str> = content.split(",").collect();
+
+    if vec_split.len() != N {
+
+        return Err(
+            EParser::VEC_VALUE(
+                content.to_string(),
+                format!("expected having {} value but found {}",N,vec_split.len())
+            )
+        );
+
+    }
+
+
+    let mut values:Vec<T> = Vec::with_capacity(N);
+
+    for i in 0..N {
+
+        match vec_split[i].to_string().parse::<T>() {
+
+            Ok(v) => values.push(v),
+            Err(e) => return Err(
+                EParser::VEC_VALUE(
+                    content.to_string(),
+                    format!("unable to parse value '{}'",vec_split[i])
+                )
+            ),
+
+        };
+
+    }
+
+    let mut arr:[T;N] = [T::default();N];
+
+    for (place, element) in arr.iter_mut().zip(values.iter()) {
+
+        *place = *element
+
+    }
+
+
+    Ok(arr)
+
+    
+}
+
+fn get_vec_content_declaration(line:&str) -> Option<String> {
+
+
+    let equal_split:String = match line.split("=").last() {
+
+        Some(v) => v.to_string(),
+        None => return None
+
+
+    };        
+
+    let mut op_par_index = match equal_split.find("(") {
+
+        Some(i) => i + 1,
+        None => return None,
+
+    };
+
+    let mut value:String = String::new();
+    let mut found = false;
+
+    while !found {
+
+        match line.chars().nth(op_par_index){
+
+            Some(c) => {
+
+                if op_par_index <= equal_split.chars().count() - 1 && 
+                c == ')' {
+
+                    found = true;
+
+                }
+
+                value = format!("{}{}",value,c);
+
+
+            },
+
+            None => return None
+
+
+        }
+
+
+        op_par_index += 1;
+
+    
+    }
+    
+
+    Some(value)
+
+}
 
 fn have_declared_value(line:&str) -> bool { line.contains("=") }
 
