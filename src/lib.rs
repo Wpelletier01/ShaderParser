@@ -2,6 +2,7 @@
 #![allow(non_snake_case)]
 
 
+
 use std::path::Path;
 use std::fs;
 use thiserror::Error;
@@ -124,7 +125,7 @@ mod test {
     fn get_storage_qualifiers() {
 
         let mut t = LayoutDeclaration::init(
-            "layout (location = 2) in vec2 aTexCoord;"
+            "layout (location = 2)"
         );
 
         t.push((LayoutVarType::LOCATION,2));
@@ -134,12 +135,12 @@ mod test {
         let expected:Vec<StorageQualifier> = vec![
 
             StorageQualifier::LAYOUT(t),
-            StorageQualifier::IN,
+       
 
         ];
 
         let founded = 
-            get_storage_qualifier("layout (location = 2) in vec2 aTexCoord;");
+            get_storage_qualifier("layout (location = 2)");
 
 
         assert_eq!(expected,founded);
@@ -160,7 +161,7 @@ mod test {
 
             remove_storage_type(
                 "layout (location = 2) in vec2 aTexCoord;", 
-                vec![StorageQualifier::LAYOUT(t),StorageQualifier::IN,]).to_string().trim(),
+                &vec![StorageQualifier::LAYOUT(t),StorageQualifier::IN,]).to_string().trim(),
             String::from("vec2 aTexCoord;")
         
         );
@@ -189,14 +190,78 @@ mod test {
     }
 
     #[test]
-    fn empty_vec3_float() {
+    fn non_empty_vec3_float() {
 
+        let s = "in vec3 aTest = vec3(1.0,0.1,0.2);";
+
+        assert_eq!(VariableType::VEC3(Some([1.0_f32,0.1_f32,0.2_f32])),get_var_type(s).unwrap());
 
 
     }
 
+    #[test]
+    fn non_empty_uvec4() {
+
+        let s = "in uvec4 aTest = uvec4(1,1,2,9);";
+
+        assert_eq!(
+            VariableType::UVEC4(Some([1_u32,1_u32,2_u32,9_u32])),
+            get_var_type(s).unwrap()
+        );
+
+    }
+
+    #[test]
+    fn filter_line_of_datatype() {
+
+        let s = "uvec4 aTest = uvec4(1,1,2,9);";
+
+        assert_eq!("aTest",remove_data_type(s, &VariableType::UVEC4(None)))
+
+    }
+
+    #[test]
+    fn load_and_parse() -> Result<(),String>  {
+
+        match load_file(get_relative_path("data_test/correct_shader.vert").as_str()) {
 
 
+            Ok(mut sinfo) => {
+
+                match sinfo.parse_line(){
+
+                    Ok(_) => {
+
+                        println!("{:?}",sinfo.declarations);
+                        
+                        return Ok(());
+
+                    }
+
+                    Err(e) => {
+
+                        return Err(
+                            format!(
+                                "Unable to parse line of shader reason: {}",
+                                e.to_string()
+                            )
+                        );
+
+                    }
+
+
+                };
+
+            },
+
+            Err(err) => Err(
+                format!("unable to load shader because of '{}'",err.to_string())
+            )
+
+
+        }
+
+    }
 
 
 }
@@ -227,7 +292,7 @@ pub enum EParser {
     MARKED_VALUE_DECL(String),
     #[error("Cant get the value of vector in line '{0}'. Reason: {1}")]
     VEC_VALUE(String,String),
-    #[error("Cant find type of variable in line '{0}")]
+    #[error("Cant find type of variable in line '{0}'")]
     VARIABLE_TYPE(String)
 
 
@@ -324,7 +389,12 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
                 
                 "frag" => stype = ShaderType::FRAGMENT,
                 "vert" => stype = ShaderType::VERTEX,
-                _ => return Err(EParser::LOADING(fp.to_string(),EParser::UNSUPPORTED_EXT(ext.to_string()).to_string())), 
+                _ => return Err(
+                    EParser::LOADING(
+                        fp.to_string(),
+                        EParser::UNSUPPORTED_EXT(ext.to_string()).to_string()
+                    )
+                ), 
 
             }
 
@@ -333,7 +403,10 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
         
         None => return Err(EParser::LOADING(
                 fp.to_string(),
-                "unable to retrieve file extension. Possible causes:\n\t- hadn't a file name\n\t- don't have a dot\n\t- have dot but nothing after".to_string()
+                "unable to retrieve file extension. Possible causes:\n\t
+                - hadn't a file name\n\t
+                - don't have a dot\n\t
+                - have dot but nothing after".to_string()
             ))
 
     
@@ -344,74 +417,68 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
     let s:Vec<String> = match fs::read_to_string(p) {
 
         Ok(val) => 
-            val.split("\n").filter(|line| line.to_string().trim() != "" ).map(|result| result.to_string()) .collect(),
+            val
+            .split("\n")
+            .filter(|line| !line.to_string().trim().is_empty() )
+            .filter(|line| line.len() > 2 && &line.to_string()[0..2] != "//")
+            .map(|result| result.to_string()) .collect(),
+
         Err(e) => return Err(EParser::LOADING(fp.to_string(),e.to_string()))
 
 
     };
 
+    // remove void blocks
+    let mut filter_s:Vec<String> = Vec::new();
+    let mut i:usize = 0;
     
-    let sinfo = ShaderFileInfo::new(
-        stype,
-        s
-    );
+    while i < s.len() - 1 {
 
-    Ok(sinfo)
+        if s[i].contains("void") {
 
-}
+            let mut found = false;
 
 
-fn filtering(mut shader_info:ShaderFileInfo) -> Result<(),EParser> {
+            let mut x:usize = 0;
 
-    // check if the first line is a preprocess declaration for the glsl version
-    if !shader_info.content[0].contains("#version") {
-        return Err(EParser::OMITTED_FIRST_LINE(shader_info.content[0].to_string())); 
-    }
+            while !found {
+                
+                
+                if (i + x) < s.len() - 1 { 
+                    
+                   if s[i + x] == "}" {
+
+                        i += x;
+                        found = true;
+                    } 
+                } else {
+                    // that mean that the last line is the bracket
+                    i += x;
+                    break;
+                }
+
+                x += 1;
 
 
-
-    let mut declarations:Vec<DeclarationLine> = Vec::new();
-
-
-
-    for line in shader_info.content.iter() {
-
-        let non_whitespace_chars:Vec<char> = line
-            .chars()
-            .filter(|c| c != &' ')
-            .collect();
-
-        if non_whitespace_chars[0] == '#' {
-
-            match parse_preprocessor(line) {
-
-                Ok(decl) => declarations.push(DeclarationLine::PREPROCESSOR(decl)),
-     
-                Err(e) => return Err(EParser::PARSING_LINE(line.to_string(),e.to_string()))
 
             }
 
 
-        } 
+        } else {
 
-        let store_qualifiers = get_storage_qualifier(line);
+            filter_s.push(s[i].to_string())
+
+        }
+
+
+        i += 1;
         
-        let filter_line = remove_storage_type(line, store_qualifiers);
-
-
-
-       
-
     }
-            
-    
 
-
-    Ok(())
-
+    Ok(ShaderFileInfo::new(stype,filter_s))
 
 }
-             
+
 
 fn get_storage_qualifier(line:&str) -> Vec<StorageQualifier>{
 
@@ -427,17 +494,17 @@ fn get_storage_qualifier(line:&str) -> Vec<StorageQualifier>{
         }
     }
 
-    if line.contains(" uniform ") {
+    if line.contains(" uniform ") || line.contains("uniform ") {
 
         vstorage.push(StorageQualifier::UNIFORM);
     
     } else {
 
-        if line.contains(" in ") {
+        if line.contains(" in ") || ( line.find("in ") == Some(0) && line.contains("in ") ) {
         
             vstorage.push(StorageQualifier::IN);
     
-        } else if line.contains(" out ") {
+        } else if line.contains(" out ") || ( line.find("out ") == Some(0) && line.contains("out ") ) {
     
             vstorage.push(StorageQualifier::OUT)
     
@@ -499,7 +566,20 @@ fn parse_layout_storage(line:&str) -> Option<StorageQualifier> {
             .map(|f| f.to_string())
             .collect();
         
-        let mut layout_var = LayoutDeclaration::init(line);   
+        let mut last_pos:usize = 0;
+
+        if close_par_index >=  line.len() - 1 {
+
+            last_pos = close_par_index;
+
+        } else {
+
+            last_pos = close_par_index + 1;
+
+        }
+
+        
+        let mut layout_var = LayoutDeclaration::init(&line[..last_pos]);   
 
 
         for content in par_content.iter() {
@@ -596,14 +676,12 @@ fn parse_preprocessor(line:&str) -> Result<PreprocessorDeclarationType,EParser> 
 }
 
 fn get_var_type(line:&str) -> Result<VariableType,EParser> {
-
+    
     
     let split_line = line.to_string();
-
-
-
+    
     for l in split_line.split(" ") {
-
+        
         if TYPE_IN_STR.contains(&l) {
 
             return match l {
@@ -773,7 +851,7 @@ fn get_var_type(line:&str) -> Result<VariableType,EParser> {
 
                 },
                 "uvec4" => {
-
+                 
                     if have_declared_value(line) {
 
                         return match format_vec_value::<u32,4>(line) {
@@ -962,9 +1040,6 @@ fn get_var_type(line:&str) -> Result<VariableType,EParser> {
 
                 },
 
-
-                
-
                 "mat2"  =>  Ok(VariableType::MAT2(None)),
 
                 "mat3"  =>  Ok(VariableType::MAT3(None)),
@@ -991,13 +1066,10 @@ fn get_var_type(line:&str) -> Result<VariableType,EParser> {
                 _ => return Err(EParser::VARIABLE_TYPE(line.to_string())),
 
             };
-
-           
+   
         }
 
-
     }
-
 
     return Err(EParser::VARIABLE_TYPE(line.to_string()))
 
@@ -1008,7 +1080,70 @@ fn format_vec_value<'a ,T,const N:usize>(content:&str) -> Result<[T;N],EParser>
 where T: std::str::FromStr + Copy + Default
 {
 
-    let vec_split:Vec<&str> = content.split(",").collect();
+    let line_split = match content.split("=").last() {
+
+        Some(v) => v,
+        None => return Err(EParser::VEC_VALUE(content.to_string(),"Not supposed to arrived here".to_string()))
+
+    };
+
+    let mut par_content:String = String::new();
+
+    
+    let mut open_par_index:usize = match line_split.find("(") {
+        
+        Some(i) => i + 1,
+        None => return Err(
+            EParser::VEC_VALUE(
+                content.to_string(),
+                "Expected to find an open bracket but found nothing".to_string()
+            )
+        )
+
+    };
+
+    while open_par_index <= line_split.len() - 1 {
+        
+        let c = match line_split.chars().nth(open_par_index) {
+
+            Some(_c) => _c,
+            None => return Err(
+                EParser::VEC_VALUE(
+                    content.to_string(),
+                    format!("Cant access char at position {}",open_par_index)
+                )
+            )
+
+        };
+
+        if open_par_index < line_split.len() - 1  { 
+            
+            if c == ')' {
+                break;
+            }
+
+        } else {
+
+            return Err(
+                EParser::VEC_VALUE(
+                    content.to_string(),
+                    "Expected to find close bracket but found nothing".to_string()
+                )
+            );
+
+        }
+
+
+
+        par_content = format!("{}{}",par_content,c);
+
+
+        open_par_index += 1;
+
+    }
+
+
+    let vec_split:Vec<&str> = par_content.split(",").collect();
 
     if vec_split.len() != N {
 
@@ -1029,7 +1164,7 @@ where T: std::str::FromStr + Copy + Default
         match vec_split[i].to_string().parse::<T>() {
 
             Ok(v) => values.push(v),
-            Err(e) => return Err(
+            Err(_) => return Err(
                 EParser::VEC_VALUE(
                     content.to_string(),
                     format!("unable to parse value '{}'",vec_split[i])
@@ -1112,12 +1247,13 @@ fn get_vec_content_declaration(line:&str) -> Option<String> {
 fn have_declared_value(line:&str) -> bool { line.contains("=") }
 
 
-fn remove_storage_type<'a>(line:&str,vstorage:Vec<StorageQualifier>) -> String {
+fn remove_storage_type<'a>(line:&str,vstorage:&Vec<StorageQualifier>) -> String {
 
     let mut filter_line = line.to_string();
 
     for store in vstorage.iter() {
- 
+        
+        println!("{}",store.as_str());
         filter_line = filter_line.replace(&store.as_str(), "");
 
     }
@@ -1125,6 +1261,29 @@ fn remove_storage_type<'a>(line:&str,vstorage:Vec<StorageQualifier>) -> String {
     filter_line
 
 }
+
+fn remove_data_type<'a>(line:&str,dtype:&VariableType) -> String {
+
+
+    if have_declared_value(line) {
+
+        let split_line = match line.split("=").nth(0) {
+
+            Some(val) => val,
+            None => return line.replace(dtype.to_string().as_str(), "").trim().to_string()
+
+        };
+
+        return split_line.replace(dtype.to_string().as_str(), "").trim().to_string()
+
+    }
+
+    line.replace(dtype.to_string().as_str(), "").trim().to_string()
+
+    
+
+
+} 
 
 
 pub struct ShaderFileInfo {
@@ -1142,6 +1301,71 @@ impl ShaderFileInfo{
     }
 
     fn push_declaration(&mut self, declaration:DeclarationLine) { self.declarations.push(declaration) }
+
+    fn parse_line(&mut self) -> Result<(),EParser> {
+
+        // check if the first line is a preprocessor declaration for the glsl version
+        if !self.content[0].contains("#version") {
+            return Err(EParser::OMITTED_FIRST_LINE(self.content[0].to_string())); 
+        }
+        
+        for line in self.content.iter() {
+    
+            let non_whitespace_chars:Vec<char> = line
+                .chars()
+                .filter(|c| c != &' ')
+                .collect();
+    
+            if non_whitespace_chars[0] == '#' {
+    
+                match parse_preprocessor(line) {
+    
+                    Ok(decl) => self.declarations.push(DeclarationLine::PREPROCESSOR(decl)),
+         
+                    Err(e) => return Err(EParser::PARSING_LINE(line.to_string(),e.to_string()))
+    
+                }
+    
+    
+            } else {
+
+                println!("{}",line);
+                
+                let squalifier:Vec<StorageQualifier> =  get_storage_qualifier(line);
+    
+                let line_without_squalifiers = remove_storage_type(line, &squalifier);
+                
+                println!("{}",line_without_squalifiers);
+                
+                let data_type = match get_var_type(line_without_squalifiers.as_str()) {
+    
+                    Ok(val) => val,
+                    Err(e) => return Err(e)
+    
+                };
+    
+    
+                let var_name = remove_data_type(line_without_squalifiers.as_str(), &data_type);
+    
+    
+    
+                let var = ShaderVariables::new(
+                    var_name.as_str(), 
+                    squalifier, 
+                    data_type
+                );
+    
+                self.declarations.push(DeclarationLine::VARIABLE(var));
+    
+            }
+    
+        }
+                
+    
+        Ok(())
+    
+    
+    }
 
 }
 

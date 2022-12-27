@@ -75,6 +75,49 @@ pub enum VariableType {
 
 }
 //
+impl VariableType {
+    //
+    pub(crate) fn to_string(&self) -> String {
+
+        match self {
+
+            Self::BOOL(_) =>        "bool",
+            Self::INT(_) =>         "int",
+            Self::FLOAT(_) =>       "float",
+            Self::DOUBLE(_) =>      "double",
+            Self::UINT(_) =>        "uint",
+            Self::DVEC2(_) =>       "dvec2",
+            Self::DVEC3(_) =>       "dvec3",
+            Self::DVEC4(_) =>       "dvec4",
+            Self::BVEC2(_) =>       "bvec2",
+            Self::BVEC3(_) =>       "bvec3",
+            Self::BVEC4(_) =>       "bvec4",
+            Self::VEC2(_) =>        "vec2",
+            Self::VEC3(_) =>        "vec3",
+            Self::VEC4(_) =>        "vec4",
+            Self::UVEC2(_) =>       "uvec2",
+            Self::UVEC3(_) =>       "uvec3",
+            Self::UVEC4(_) =>       "uvec4",
+            Self::MAT2(_) =>        "mat2",
+            Self::MAT3(_) =>        "mat3",
+            Self::MAT4(_) =>        "mat4",
+            Self::DMAT2(_) =>       "dmat2",
+            Self::DMAT3(_) =>       "dmat3",
+            Self::DMAT4(_) =>       "dmat4",
+            Self::IVEC2(_) =>       "ivec2",
+            Self::IVEC3(_) =>       "ivec3",
+            Self::IVEC4(_) =>       "ivec4",
+            Self::SAMPLER2D(_) =>   "sampler2d",
+            Self::ISAMPLER2D(_) =>  "isampler2D",
+            Self::USAMPLER2D(_) =>  "usampler2D"
+
+        
+        }.to_string()
+
+    }
+    //
+}
+//
 //
 // ------------------------------------------------------------------------------------------
 //  Preprocessor Declarations types struct 
@@ -196,6 +239,21 @@ pub struct ShaderVariables {
 
 
 }
+//
+impl ShaderVariables {
 
+    pub(crate) fn new(
+        name:       &str,
+        store_type: Vec<StorageQualifier>,
+        var_type:   VariableType ) -> Self {
+
+        ShaderVariables { 
+            name:       name.to_string(),
+            store_type: store_type,
+            var_type:   var_type 
+        }
+    }
+
+}
 
 
