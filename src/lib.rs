@@ -2,17 +2,16 @@
 #![allow(non_snake_case)]
 
 
+pub mod datatype;
 
 use std::path::Path;
 use std::fs;
 use thiserror::Error;
 
-pub mod datatype;
-
-
 use datatype::*;
 
 
+// TODO: finishing adding comment  
 //
 //
 // ------------------------------------------------------------------------------------------
@@ -62,7 +61,7 @@ mod test {
         assert!(t.is_err());
 
     }
-    //
+    
     #[test]
     fn shader_type() -> Result<(),String> {
 
@@ -295,59 +294,76 @@ pub enum EParser {
     #[error("Cant find type of variable in line '{0}'")]
     VARIABLE_TYPE(String)
 
-
 }
-   
-
+//
+// ------------------------------------------------------------------------------------------   
+// Constant 
+// 
+/// Array of possible type that glsl accepts
 const TYPE_IN_STR: [&str;27] = [
-    
+    //
+    // scalar
     "bool",
     "int",
     "uint",
     "float",
     "double",
-
-
+    // unsigned integer vector
     "uvec2",
     "uvec3",
     "uvec4",
-
+    // signed integer vector
     "ivec2",
     "ivec3",
     "ivec4",
-
+    // boolean vector
     "bvec2",
     "bvec3",
     "bvec4",
-
+    // float vector
     "vec2",
     "vec3",
     "vec4",
-
+    // double precision(f64) float vector
     "dvec2",
     "dvec3",
     "dvec4",
-
+    // float matrices
     "mat2",
     "mat3",
     "mat4",
-  
-    
+    // double precision (f64) float matrices
     "dmat2",
     "dmat3",
     "dmat4",
-
+    // texture 
     "sampler2D"
-
+    //
+    //
 ];
-
-
+//
+//
+/// Create a ShaderFileInfo struct with the path passed of a shader file
+/// 
+/// # Arguments
+/// 
+/// * 'fp' - A path to a shader file as a &str
+/// 
+/// # Error causes 
+/// 
+/// * The file passed doesn't exist or is not a file
+/// * The file passed is a broken symbolic link
+/// * The file passed caused an permission denied error
+/// * The file haven't a file extension that we take care of or cannot access it
+/// * Cant convert a the file content to a string
+/// *
+/// 
 fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
-
-    
+    //
+    //
     let p = Path::new(fp);
-
-    
+    //
+    // check if the file exists and is allow
     match p.try_exists()  {
 
         Ok(rep) => {
@@ -369,22 +385,23 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
         Err(e) => return Err(EParser::LOADING(fp.to_string(),e.to_string())),
 
     }
-    
-    
-    let stype:ShaderType;
-
-    // Check if the file passed have a supported extension
+    //
+    //
+    let stype:ShaderType; // determines by the file extension got
+    //
+    // Check if the file passed have a supported extension and then store it in stype
     match p.extension() {
-        
+        //
         Some(_ext) => {
-            
+            //  
+            // convert to &str
             let ext = match _ext.to_str() {
                 Some(ex) => ex,
                 None => return Err(EParser::LOADING(fp.to_string(),EParser::OS_STRING_CONVERSION.to_string())),
 
             };
-
-
+            //
+            // compared with the allowed extensions
             match ext {
                 
                 "frag" => stype = ShaderType::FRAGMENT,
@@ -395,12 +412,12 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
                         EParser::UNSUPPORTED_EXT(ext.to_string()).to_string()
                     )
                 ), 
-
+                
             }
-
-
+            //
         },
-        
+        //
+        // weird rare case
         None => return Err(EParser::LOADING(
                 fp.to_string(),
                 "unable to retrieve file extension. Possible causes:\n\t
@@ -408,12 +425,12 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
                 - don't have a dot\n\t
                 - have dot but nothing after".to_string()
             ))
-
-    
+        //
     }
-
-
-
+    //
+    //
+    // collect content of the file has a vector of string that represents each line of the file
+    // also, we filter out comment and empty lines 
     let s:Vec<String> = match fs::read_to_string(p) {
 
         Ok(val) => 
@@ -427,7 +444,7 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
 
 
     };
-
+    //
     // remove void blocks
     let mut filter_s:Vec<String> = Vec::new();
     let mut i:usize = 0;
@@ -437,16 +454,14 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
         if s[i].contains("void") {
 
             let mut found = false;
-
-
             let mut x:usize = 0;
 
             while !found {
                 
-                
                 if (i + x) < s.len() - 1 { 
                     
-                   if s[i + x] == "}" {
+                    // if the void block closing bracket is on his own line or at the end of a line
+                    if s[i + x] == "}" || s[i + x].trim().chars().last() == Some('}') {
 
                         i += x;
                         found = true;
@@ -459,10 +474,7 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
 
                 x += 1;
 
-
-
             }
-
 
         } else {
 
@@ -470,155 +482,154 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
 
         }
 
-
         i += 1;
         
     }
-
+    //
+    //
     Ok(ShaderFileInfo::new(stype,filter_s))
-
+    //
 }
-
-
+//
+//
+/// search for a storage qualifier in a line of the shader file
+/// 
+/// # parameters
+/// 
+/// * line - a line of the shader file
+/// 
 fn get_storage_qualifier(line:&str) -> Vec<StorageQualifier>{
-
+    //
+    // will store all the qualifier found
     let mut vstorage:Vec<StorageQualifier> = Vec::new();
-
+    //
+    // check if is a layout storage declaration
     if line.contains("layout") {
-        
+        //
+        // then parse the info of the layout storage declaration
         match parse_layout_storage(line) {
 
             Some(s) => vstorage.push(s),
             None => {}
     
         }
+        //
     }
-
+    // 
+    // we check also for other because layout storage declarations can have more than one
+    // qualifier
+    //
+    // check if its have a uniform,input or output declaration
     if line.contains(" uniform ") || line.contains("uniform ") {
-
+        
         vstorage.push(StorageQualifier::UNIFORM);
     
+     
+    } else if line.contains(" in ") || ( line.find("in ") == Some(0) && line.contains("in ") ) {
+        
+        vstorage.push(StorageQualifier::IN);
+    
+    } else if line.contains(" out ") || ( line.find("out ") == Some(0) && line.contains("out ") ) {
+    
+        vstorage.push(StorageQualifier::OUT)
+
+    } 
+    //
+    //
+    vstorage
+    //
+}
+//
+//
+/// Return info on the content of layout storage declarations
+/// 
+/// # parameters
+/// 
+/// * line - a line of a shader file that have been confirmed
+/// to have a layout declaration
+/// 
+fn parse_layout_storage(line:&str) -> Option<StorageQualifier> {
+    //
+    // find where the layout declaration parentheses start
+    //
+    //  layout (location = 1) in
+    //         ^ 
+    //         |
+    //         × —— what we looking for
+    //
+    let open_par_index = match line.find("layout") {
+
+        Some(i) => i + 6,
+        None => return None
+
+    };
+    //
+    // init the close parentheses at the same position of the open on
+    let mut close_par_index = open_par_index;
+    let mut found = false;
+    //
+    while !found {
+        
+        if line.chars().nth(close_par_index).unwrap() == ')' {
+            found = true;
+        }
+        
+        close_par_index += 1;
+
+    }
+    // get the content of the parentheses
+    let par_content:Vec<String> = line.to_string()[open_par_index + 1 .. close_par_index ]
+        .split(',')
+        .map(|f| f.to_string())
+        .collect();
+    //
+    // 
+    // we need to make sure that the close parentheses is not out range of the string slice
+    let last_pos:usize;
+
+    if close_par_index >=  line.len() - 1 {
+
+        last_pos = close_par_index;
+
     } else {
 
-        if line.contains(" in ") || ( line.find("in ") == Some(0) && line.contains("in ") ) {
-        
-            vstorage.push(StorageQualifier::IN);
-    
-        } else if line.contains(" out ") || ( line.find("out ") == Some(0) && line.contains("out ") ) {
-    
-            vstorage.push(StorageQualifier::OUT)
-    
-        } 
+        last_pos = close_par_index + 1;
 
     }
+    //
+    //  
+    let mut layout_var = LayoutDeclaration::init(&line[..last_pos]);   
+    //
+    // check for every declaration in parentheses
+    for content in par_content.iter() {
 
-    vstorage
+        if content.contains("location") {
 
-}
-
-
-
-
-
-
-fn parse_shader_stage_storage(line:&str) -> Option<StorageQualifier> {
-
-
-    if line.contains(" in ") { return Some(StorageQualifier::IN); }
-    else if line.contains(" out") { return Some(StorageQualifier::OUT); }
-
-    None
-
-}
+            let type_ = LayoutVarType::LOCATION;
 
 
-fn parse_layout_storage(line:&str) -> Option<StorageQualifier> {
+            let value:String = content
+                .chars()
+                .filter(|c| c.is_ascii_digit())
+                .collect();
 
-    if line.contains("layout") {
-
-        let open_par_index = match line.find("layout") {
-
-            Some(i) => i + 6,
-            None => return None
-
-        };
-
-        let mut close_par_index = open_par_index;
-
-        let mut found = false;
+            let value_num:u32 = match value.parse::<u32>() {
+                Ok(v) => v,
+                Err(_) => return None
 
 
-        while !found {
+            };
 
-            if line.chars().nth(close_par_index).unwrap() == ')' {
-
-                found = true;
-
-            }
-
-            close_par_index += 1;
+            layout_var.push((type_,value_num))
 
 
         }
-        
-        let par_content:Vec<String> = line.to_string()[open_par_index + 1 .. close_par_index ]
-            .split(',')
-            .map(|f| f.to_string())
-            .collect();
-        
-        let mut last_pos:usize = 0;
-
-        if close_par_index >=  line.len() - 1 {
-
-            last_pos = close_par_index;
-
-        } else {
-
-            last_pos = close_par_index + 1;
-
-        }
-
-        
-        let mut layout_var = LayoutDeclaration::init(&line[..last_pos]);   
-
-
-        for content in par_content.iter() {
-
-            if content.contains("location") {
-
-                let type_ = LayoutVarType::LOCATION;
-
-
-                let value:String = content
-                    .chars()
-                    .filter(|c| c.is_ascii_digit())
-                    .collect();
-
-                let value_num:u32 = match value.parse::<u32>() {
-
-                    Ok(v) => v,
-                    Err(_) => return None
-
-
-                };
-
-                layout_var.push((type_,value_num))
-
-
-            }
-
-
-
-        }
-        
-        
-        return Some(StorageQualifier::LAYOUT(layout_var))
 
 
     }
-
-
-    None 
+    //    
+    //  
+    Some(StorageQualifier::LAYOUT(layout_var))
 
 }
 

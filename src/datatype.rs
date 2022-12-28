@@ -241,7 +241,8 @@ pub struct ShaderVariables {
 }
 //
 impl ShaderVariables {
-
+    //
+    /// create a new shader variables struct
     pub(crate) fn new(
         name:       &str,
         store_type: Vec<StorageQualifier>,
@@ -252,8 +253,10 @@ impl ShaderVariables {
             store_type: store_type,
             var_type:   var_type 
         }
+    
     }
-
+    //
 }
-
+//
+//
 
