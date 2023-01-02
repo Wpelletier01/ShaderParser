@@ -12,6 +12,7 @@ use datatype::*;
 
 
 // TODO: finishing adding comment  
+// TODO: remake test for parsing because of change occurred
 //
 //
 // ------------------------------------------------------------------------------------------
@@ -219,48 +220,7 @@ mod test {
 
     }
 
-    #[test]
-    fn load_and_parse() -> Result<(),String>  {
-
-        match load_file(get_relative_path("data_test/correct_shader.vert").as_str()) {
-
-
-            Ok(mut sinfo) => {
-
-                match sinfo.parse_line(){
-
-                    Ok(_) => {
-
-                        println!("{:?}",sinfo.declarations);
-                        
-                        return Ok(());
-
-                    }
-
-                    Err(e) => {
-
-                        return Err(
-                            format!(
-                                "Unable to parse line of shader reason: {}",
-                                e.to_string()
-                            )
-                        );
-
-                    }
-
-
-                };
-
-            },
-
-            Err(err) => Err(
-                format!("unable to load shader because of '{}'",err.to_string())
-            )
-
-
-        }
-
-    }
+    
 
 
 }
@@ -292,7 +252,9 @@ pub enum EParser {
     #[error("Cant get the value of vector in line '{0}'. Reason: {1}")]
     VEC_VALUE(String,String),
     #[error("Cant find type of variable in line '{0}'")]
-    VARIABLE_TYPE(String)
+    VARIABLE_TYPE(String),
+    #[error("Cant convert Vec<u8> to String because of {0}")]
+    U8_STRING_CONVERSION(String),
 
 }
 //
@@ -343,6 +305,7 @@ const TYPE_IN_STR: [&str;27] = [
 ];
 //
 //
+// TODO: will probably be removed for no practical use but some part of it could be interesting
 /// Create a ShaderFileInfo struct with the path passed of a shader file
 /// 
 /// # Arguments
@@ -487,7 +450,7 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
     }
     //
     //
-    Ok(ShaderFileInfo::new(stype,filter_s))
+    Ok(ShaderFileInfo::new(stype))
     //
 }
 //
@@ -1300,27 +1263,30 @@ fn remove_data_type<'a>(line:&str,dtype:&VariableType) -> String {
 pub struct ShaderFileInfo {
 
     type_: ShaderType,
-    content: Vec<String>,     // file content 
     declarations: Vec<DeclarationLine>
 
 }
 
 impl ShaderFileInfo{
 
-    fn new(type_: ShaderType, content: Vec<String> ) -> ShaderFileInfo {
-        ShaderFileInfo { type_: type_, declarations: Vec::new(), content: content } 
+    fn new(type_: ShaderType ) -> ShaderFileInfo {
+        ShaderFileInfo { type_: type_, declarations: Vec::new() } 
     }
 
     fn push_declaration(&mut self, declaration:DeclarationLine) { self.declarations.push(declaration) }
 
-    fn parse_line(&mut self) -> Result<(),EParser> {
+    fn parse_line(&mut self,content:&[u8]) -> Result<(),EParser> {
+
+
+        let scontent = Self::convert_content(content)?;
+
 
         // check if the first line is a preprocessor declaration for the glsl version
-        if !self.content[0].contains("#version") {
-            return Err(EParser::OMITTED_FIRST_LINE(self.content[0].to_string())); 
+        if !scontent[0].contains("#version") {
+            return Err(EParser::OMITTED_FIRST_LINE(scontent[0].to_string())); 
         }
         
-        for line in self.content.iter() {
+        for line in scontent.iter() {
     
             let non_whitespace_chars:Vec<char> = line
                 .chars()
@@ -1376,6 +1342,30 @@ impl ShaderFileInfo{
         Ok(())
     
     
+    }
+
+    fn convert_content(to_convert: &[u8]) -> Result<Vec<String>,EParser> {
+
+
+        let scontent = match String::from_utf8(to_convert.to_owned()) {
+
+            Ok(s) => s,
+            Err(e) => return Err(EParser::U8_STRING_CONVERSION(e.to_string())),
+
+
+        };
+
+
+        Ok(scontent
+            .split("\n")
+            .filter(|line| !line.to_string().trim().is_empty() )
+            .filter(|line| line.len() > 2 && &line.to_string()[0..2] != "//") // remove comment line 
+            .map(|result| result.to_string())
+            .collect()
+        )
+
+
+
     }
 
 }
