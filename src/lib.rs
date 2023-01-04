@@ -64,33 +64,6 @@ mod test {
     }
     
     #[test]
-    fn shader_type() -> Result<(),String> {
-
-        match load_file(get_relative_path("data_test/correct_shader.frag").as_str()) {
-
-
-            Ok(sinfo) => {
-
-                if sinfo.type_ ==  ShaderType::FRAGMENT {
-
-                    return Ok(())
-                }
-
-                Err(format!("expected shader type FRAGMENT but got {:?}",sinfo.type_))
-
-            },
-
-            Err(err) => Err(
-                format!("unable to compare shader type because of '{}'",err.to_string())
-            )
-
-
-        }
-
-    }
-
-
-    #[test]
     fn broken_symlink() {
 
         let p = get_relative_path("data_test/ex_symlink/test");
@@ -450,7 +423,9 @@ fn load_file(fp:&str) -> Result<ShaderFileInfo,EParser> {
     }
     //
     //
-    Ok(ShaderFileInfo::new(stype))
+
+
+    Ok(ShaderFileInfo::new())
     //
 }
 //
@@ -1258,24 +1233,21 @@ fn remove_data_type<'a>(line:&str,dtype:&VariableType) -> String {
 
 
 } 
-
-
+//
+//
 pub struct ShaderFileInfo {
 
-    type_: ShaderType,
     declarations: Vec<DeclarationLine>
 
 }
 
 impl ShaderFileInfo{
 
-    fn new(type_: ShaderType ) -> ShaderFileInfo {
-        ShaderFileInfo { type_: type_, declarations: Vec::new() } 
-    }
+    pub fn new() -> ShaderFileInfo { ShaderFileInfo { declarations: Vec::new() } }
 
-    fn push_declaration(&mut self, declaration:DeclarationLine) { self.declarations.push(declaration) }
+    pub fn push_declaration(&mut self, declaration:DeclarationLine) { self.declarations.push(declaration) }
 
-    fn parse_line(&mut self,content:&[u8]) -> Result<(),EParser> {
+    pub fn parse_line(&mut self,content:&[u8]) -> Result<(),EParser> {
 
 
         let scontent = Self::convert_content(content)?;
